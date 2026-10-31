@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>رسن — جرّبها الآن بلا تسجيل</title>
+<meta name="description" content="دردشة مشفرة طرف-لطرف بلا رقم هاتف — افتح، جرّب، امسح. تجربة فورية بزوار حسابات مؤقتة تُمسح تلقائياً." />
+<link rel="manifest" href="/manifest.json" />
+<link rel="stylesheet" href="/style.css" />
+<style>
+/* أنماط صفحة الهبوط فقط — موصولة بمتغيرات التصميم العامة في style.css */
+html{scroll-behavior:smooth}
+body{overflow:auto}
+.demo-page{max-width:960px;margin:0 auto;padding:24px 20px 64px}
+.demo-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:40px}
+.demo-nav .brand{font-size:1.5rem;font-weight:800;color:var(--accent);text-decoration:none}
+.lang-btn{background:var(--surface-2);color:var(--text-soft);border:1px solid var(--surface-3);border-radius:999px;padding:8px 16px;cursor:pointer;font-family:inherit;font-size:.875rem}
+.hero{text-align:center;padding:32px 0 40px}
+.hero h1{font-size:clamp(1.75rem,5vw,2.75rem);font-weight:800;line-height:1.35;margin-bottom:12px}
+.hero h1 em{color:var(--accent);font-style:normal}
+.hero .sub{color:var(--muted);font-size:1.0625rem;max-width:560px;margin:0 auto 28px;line-height:1.8}
+.try-btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:16px 44px;font-size:1.125rem;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 12px 40px rgba(0,168,132,.35);transition:.2s}
+.try-btn:hover{background:var(--accent-strong);transform:translateY(-1px)}
+.try-btn:disabled{opacity:.6;cursor:progress;transform:none}
+.try-note{color:var(--muted);font-size:.8125rem;margin-top:14px;min-height:20px}
+.try-err{color:var(--danger)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:28px 0 48px}
+.step{background:var(--surface);border:1px solid var(--surface-3);border-radius:var(--radius-lg);padding:22px 18px;text-align:center}
+.step .n{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:800;margin-bottom:10px}
+.step h3{font-size:1rem;margin-bottom:6px}
+.step p{color:var(--muted);font-size:.8125rem;line-height:1.7}
+.feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.feat{background:var(--surface);border:1px solid var(--surface-3);border-radius:var(--radius-md);padding:18px;display:flex;gap:12px;align-items:flex-start}
+.feat .ic{font-size:1.375rem;line-height:1}
+.feat b{display:block;margin-bottom:4px;font-size:.9375rem}
+.feat span{color:var(--muted);font-size:.8125rem;line-height:1.7}
+.demo-foot{margin-top:48px;text-align:center;color:var(--muted);font-size:.8125rem;line-height:2}
+.demo-foot a{color:var(--accent);text-decoration:none;font-weight:600}
+.wipe-promise{display:inline-block;background:var(--surface-2);border:1px dashed var(--surface-4);border-radius:999px;padding:6px 16px;margin-bottom:16px;font-size:.75rem;color:var(--text-soft)}
+</style>
+</head>
+<body>
+<main class="demo-page">
+  <nav class="demo-nav">
+    <a class="brand" href="/">رسن</a>
+    <button id="lang-btn" class="lang-btn" type="button">English</button>
+  </nav>
+
+  <section class="hero">
+    <div class="wipe-promise" data-i18n="wipePromise">🧹 بيانات الزوار تُمسح تلقائياً — لا شيء يبقى</div>
+    <h1 data-i18n-html="heroTitle">دردشة <em>مشفّرة طرف-لطرف</em><br />بلا رقم هاتف وبلا تسجيل</h1>
+    <p class="sub" data-i18n="heroSub">رسن منصة مراسلة مفتوحة المصدر: تشفير حقيقي، مكالمات صوتية وجماعية، وعمل بلا إنترنت عبر الشبكة المحلية. جرّبها الآن بحساب زائر مؤقت — نقرة واحدة.</p>
+    <button id="try-btn" class="try-btn" type="button" data-i18n="tryNow">🚀 جرّب الآن — بلا تسجيل</button>
+    <p id="try-note" class="try-note" aria-live="polite"></p>
+  </section>
+
+  <section class="steps" aria-label="كيف تعمل التجربة">
+    <div class="step"><span class="n">1</span><h3 data-i18n="step1T">افتح</h3><p data-i18n="step1P">بلا رقم، بلا بريد، بلا كلمة مرور — نقرة واحدة تولّد مفاتيحك على جهازك أنت فقط.</p></div>
+    <div class="step"><span class="n">2</span><h3 data-i18n="step2T">جرّب</h3><p data-i18n="step2P">دردشة ومكالمات واستطلاعات وستوريات — كل شيء مشفّر فعلياً كما في الحساب الدائم.</p></div>
+    <div class="step"><span class="n">3</span><h3 data-i18n="step3T">امسح</h3><p data-i18n="step3P">بيانات الزوار تُمحى تلقائياً كل 6 ساعات وعند كل إقلاع للخادم — لا شيء يبقى لك ولا علينا.</p></div>
+  </section>
+
+  <section class="feats" aria-label="الميزات">
+    <div class="feat"><span class="ic">🔐</span><div><b data-i18n="f1T">تشفير طرف-لطرف حقيقي</b><span data-i18n="f1P">ECDH + AES-GCM: الرسائل تُشفَّر وتُفك على الجهازين فقط — الخادم ينقل عتمة.</span></div></div>
+    <div class="feat"><span class="ic">📵</span><div><b data-i18n="f2T">بلا رقم هاتف</b><span data-i18n="f2P">اسم مستخدم فقط — لا دفتر عناوين ولا هوية هاتفية تُربط بك (نمط Session).</span></div></div>
+    <div class="feat"><span class="ic">📻</span><div><b data-i18n="f3T">تعمل بلا إنترنت</b><span data-i18n="f3P">«صلة»: شبكة محلية بين الأجهزة + دعم LoRa — الميزة التي لا يملكها Signal ولا WhatsApp.</span></div></div>
+    <div class="feat"><span class="ic">📞</span><div><b data-i18n="f4T">مكالمات ثنائية وجماعية</b><span data-i18n="f4P">صوت مشفّر حتى 8 مشاركين + وضع للّكة (PTT) للفرق الميدانية.</span></div></div>
+    <div class="feat"><span class="ic">🌍</span><div><b data-i18n="f5T">عربية أولاً</b><span data-i18n="f5P">واجهة من اليمين لليسار من الجذر + 12 لغة — لا ترجمة لاحقة.</span></div></div>
+    <div class="feat"><span class="ic">🛡️</span><div><b data-i18n="f6T">إشراف كامل وخادم خفيف</b><span data-i18n="f6P">حظر وأدوار وتثبيت، وخادم بملف واحد (Node + SQLite) يُنشر بأمر واحد.</span></div></div>
+  </section>
+
+  <footer class="demo-foot">
+    <p data-i18n="footCta">أعجبتك؟ أنشئ حسابك الدائم في دقيقة:</p>
+    <p><a href="/" data-i18n="footLink">إنشاء حساب دائم ←</a></p>
+    <p><span data-i18n="footOs">مشروع مفتوح المصدر</span> · <a href="https://github.com/tibatechapp-ship-it/Rasan" rel="noopener">GitHub</a></p>
+  </footer>
+</main>
+
+<script src="/crypto.js"></script>
+<script src="/demo.js"></script>
+</body>
+</html>

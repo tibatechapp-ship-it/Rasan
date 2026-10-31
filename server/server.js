@@ -5,7 +5,7 @@ const fs = require("fs");
 const multer = require("multer");
 const { Server } = require("socket.io");
 const { db, DATA_DIR, UPLOAD_DIR } = require("./db");
-const { router: authRouter, verifyToken, authRequired } = require("./auth");
+const { router: authRouter, verifyToken, authRequired, signToken } = require("./auth");
 const security = require("./security");
 const push = require("./push");
 const notifications = require("./notifications");
@@ -25,6 +25,8 @@ const interactions = require("./interactions");
 const privacy = require("./privacy");
 // المسح الدوري للرسائل المتلاشية (P6 — إصلاح: المؤقتات تموت بإعادة التشغيل)
 const ephemeral = require("./ephemeral");
+// صفحة التجربة العامة (P7 — أسبوع 2 من خارطة المنتَجة): حسابات زوار + مسح دوري
+const demo = require("./demo");
 
 const app = express();
 const server = http.createServer(app);
@@ -48,6 +50,7 @@ app.use("/api", panic.createRouter({ authRequired, io }));
 app.use("/api", moderation.createRouter({ authRequired, io }));
 app.use("/api", interactions.createRouter({ authRequired, io }));
 app.use("/api", privacy.createRouter({ authRequired, io })); // P6: ttl + accept/decline
+app.use("/api", demo.createRouter({ signToken, io })); // P7: جلسة الزائر + حالة الصفحة
 
 const upload = multer({ dest: UPLOAD_DIR, limits: { fileSize: 30 * 1024 * 1024 } });
 
@@ -60,6 +63,13 @@ loraGateway.init(io, silaMesh);
 // P6 — مسح المتلاشية عند الإقلاع: أي رسالة تجاوزت مؤقتها أثناء التوقف تُمحى
 // فوراً قبل استقبال أي اتصال (الوعد يعود ساريًا حتى بعد انقطاع طويل).
 ephemeral.sweepEphemeral({ io });
+// P7 — التجربة العامة عند الإقلاع: زرع حسابات الزوار + مسح قسري (بيانات
+// الزوار لا تعبر حداً لإقلاع الخادم — «امسح» وعد بلا استثناء، والسحابة
+// المؤقتة على Render تعيد التشغيل كثيراً فتخرج نظيفة دائماً).
+if (demo.demoEnabled()) {
+  demo.ensureDemoAccounts();
+  demo.sweepDemo({ io, force: true });
+}
 
 // Deployment identity. Render exports the commit it is serving, so a post-deploy
 // check can prove that the LIVE process runs the code which just landed — a 200
@@ -69,6 +79,11 @@ const VERSION = require("./package.json").version;
 
 app.get("/health", (_q, res) =>
   res.json({ ok: true, uptime: process.uptime(), version: VERSION, commit: COMMIT })
+);
+// صفحة التجربة العامة (P7 — أسبوع 2): /demo صريح لأن express.static لا يقدّم
+// demo.html للـURL بلا امتداد — والرابط القصير جزء من الوعد («افتح» بنقرة).
+app.get("/demo", (_req, res) =>
+  res.sendFile(path.join(__dirname, "..", "web", "demo.html"))
 );
 app.get("/api/stats", (req, res) => {
   const key = req.query.key;
@@ -669,6 +684,8 @@ setInterval(() => {
   // P6 — مسح المتلاشية كل 60 ثانية: يلتقط كل ما تجاوز مؤقته حتى لو سقط
   // setTimeout الخاص به بإعادة تشغيل — الوعد بلا استثناء لا بمؤقتات هشة.
   ephemeral.sweepEphemeral({ io });
+  // P7 — مسح بيانات الزوار التجريبية (بوابة زمنية داخلية 6 ساعات افتراضياً)
+  demo.sweepDemo({ io });
 }, 60 * 1000);
 
 app.use(security.errorHandler);

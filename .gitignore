@@ -27,3 +27,4 @@ server/data/
 *.db-wal
 test.sh
 test.sh
+test-results/

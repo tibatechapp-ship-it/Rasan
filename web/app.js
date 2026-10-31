@@ -316,6 +316,8 @@ async function enterApp() {
   $("auth").classList.add("hidden");
   $("app").classList.remove("hidden");
   if (!state.myKeys) state.myKeys = await idbGet("myKeypair");
+  // شارة الزائر التجريبي (P7): حسابات /demo فقط — تذكير دائم بأن البيانات مؤقتة
+  if (state.user?.is_demo) $("demo-banner")?.classList.remove("hidden");
   connectSocket();
   await loadConversations();
   loadBlocks(); // قائمة حظري (P4) — فشلها لا يعطل الدخول (أزرار الحظر تعرض الحالة الافتراضية)
@@ -717,6 +719,12 @@ async function openConversation(conv) {
         // Bridge to the security/identity module (TOFU + safety number + QR)
         window.dispatchEvent(new CustomEvent("rasan:conv-open", { detail: { peerId: String(peer.id), peerPublicKey: peer.public_key, myPublicKey: state.myKeys?.publicKey || null } }));
       }
+    } else {
+      // محادثة الذات «رسائل محفوظة» (P5): لا طرف ثانٍ — المفتاح يُشتق عبر
+      // ECDH مع مفتاحي العام نفسه (سر مشترك ثابت لنفس زوج المفاتيح). الإرسال
+      // كان صامتاً هنا بلا مفتاح (خلل حقيقي اكتشفه E2E الأسبوع 2: النقر على
+      // الإرسال لا يفعل شيئاً في المحفوظات) — الآن التشفير يعمل كما في DM.
+      state.activeKey = await RasanCrypto.deriveShared(state.myKeys.privateKey, state.myKeys.publicKey);
     }
   } else {
     await ensureGroupKey(conv);
@@ -2356,6 +2364,18 @@ $("member-add-form").addEventListener("submit", async (e) => {
     const { user } = await api("/api/auth/me");
     state.user = user;
     state.myKeys = await idbGet("myKeypair");
+    if (state.myKeys) return enterApp();
+    // مفاتيح مفقودة والتوكن حي (P7): زائر التجربة يولّد مفاتيحاً جديدة ويرفع
+    // مفتاحه العام تلقائياً — فالسندرة (محو IndexedDB) لا تُخرجه من التجربة.
+    // الحساب الدائم بلا مفاتيح يحصل على مسار الاستعادة المعتاد (رمز الاستعادة)
+    // أو بداية بلا ماضٍ — نفس عقد مسار الدخول القائم.
+    if (user.is_demo) {
+      state.myKeys = await RasanCrypto.genKeypair();
+      await idbPut("myKeypair", state.myKeys);
+      await api("/api/auth/update-public-key", { method: "POST", body: JSON.stringify({ publicKey: state.myKeys.publicKey }) }).catch(() => {});
+      return enterApp();
+    }
+    await promptRestore();
     if (state.myKeys) await enterApp();
   } catch { localStorage.removeItem("rasan_token"); }
 })();

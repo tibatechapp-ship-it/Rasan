@@ -1,0 +1,45 @@
+name: demo-e2e
+# E2E صفحة التجربة العامة (أسبوع 2 من خارطة المنتَجة) — معلم آلي مستقل عن ci.yml:
+# خادم حقيقي بقاعدة مؤقتة + Chromium حقيقي + رحلة زائر كاملة حتى رسالة مشفرة.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visitor-journey:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # اعتماديات الخادم الحقيقي (express/socket.io/...) — الـE2E يشغّله فعلاً
+      - name: Install server deps
+        run: |
+          if [ -f server/package-lock.json ]; then npm ci --prefix server --no-audit --no-fund; else npm install --prefix server --no-audit --no-fund; fi
+
+      # حزمة E2E معزولة عن الجذر عمداً — لا تمس حزمة اختبارات vitest إطلاقاً
+      - name: Install e2e deps
+        working-directory: e2e
+        run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+          npx playwright install --with-deps chromium
+
+      - name: Run visitor journey (Playwright)
+        working-directory: e2e
+        run: npx playwright test -c playwright.config.js
+
+      - name: Upload failure report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/test-results/
+          retention-days: 7

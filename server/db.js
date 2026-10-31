@@ -198,5 +198,20 @@ try {
 } catch (e) {
   if (!String(e.message).includes("duplicate column name")) throw e;
 }
+// is_demo + demo_last_used (P7 — أسبوع 2 من خارطة المنتَجة): حسابات الزوار
+// التجريبية لصفحة /demo («افتح، جرّب، امسح»). is_demo يميّز الحساب (لا يمكنه
+// تغيير كلمة المرور؛ بياناته تُمسح دورياً)، وdemo_last_used يدير التناوب
+// بين حسابات المسبح (الأقدم استخداماً يُمنح للزائر التالي) — العمودان
+// على users نفسه بلا جدول جديد ليبقى التصميم بسيطاً.
+try {
+  db.exec("ALTER TABLE users ADD COLUMN is_demo INTEGER DEFAULT 0");
+} catch (e) {
+  if (!String(e.message).includes("duplicate column name")) throw e;
+}
+try {
+  db.exec("ALTER TABLE users ADD COLUMN demo_last_used INTEGER DEFAULT 0");
+} catch (e) {
+  if (!String(e.message).includes("duplicate column name")) throw e;
+}
 
 module.exports = { db, DATA_DIR, UPLOAD_DIR };

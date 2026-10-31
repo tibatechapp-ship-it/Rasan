@@ -52,6 +52,10 @@ function recordLoginSuccess(username) {
 function validateUsername(u) {
   return typeof u === "string" && /^[a-zA-Z0-9_]{3,24}$/.test(u.trim());
 }
+// أسماء محجوزة (P7 — أسبوع 2): حسابات الزوار التجريبية تُدار خادمياً فقط —
+// لا يجوز لأحد تسجيلها يدوياً فيتظلل مسار التناوب والمسح (الرد 409 نفسه
+// كـ«username taken» بلا كشف سبب خاص).
+const RESERVED_USERNAMES = new Set(["demo", "demo1", "demo2", "demo3"]);
 function validatePassword(p) {
   return typeof p === "string" && p.length >= 6 && p.length <= 72;
 }
@@ -76,7 +80,7 @@ function authRequired(req, res, next) {
   if (!t) return res.status(401).json({ error: "unauthorized" });
   const p = verifyToken(t);
   if (!p) return res.status(401).json({ error: "unauthorized" });
-  const user = db.prepare("SELECT id, username, email, locale, public_key, created_at, token_version FROM users WHERE id = ?").get(p.sub);
+  const user = db.prepare("SELECT id, username, email, locale, public_key, created_at, token_version, is_demo FROM users WHERE id = ?").get(p.sub);
   if (!user) return res.status(401).json({ error: "unauthorized" });
   // توكن صادر قبل رفع token_version (تغيير مرور/خروج شامل) = ميت — حتى لو
   // توقيعه صحيح، ليعمل تغيير كلمة المرور كإبطال فوري لكل الجلسات الأخرى.
@@ -93,7 +97,7 @@ router.post("/register", async (req, res) => {
   if (!validatePublicKey(publicKey)) return res.status(400).json({ error: "public key required" });
   const u = username.trim();
   const exists = db.prepare("SELECT id FROM users WHERE username = ?").get(u);
-  if (exists) return res.status(409).json({ error: "username taken" });
+  if (exists || RESERVED_USERNAMES.has(u.toLowerCase())) return res.status(409).json({ error: "username taken" });
   const hash = await bcrypt.hash(password, 10);
   const info = db.prepare("INSERT INTO users (username, password_hash, public_key, locale, created_at) VALUES (?, ?, ?, ?, ?)").run(u, hash, publicKey, locale || "ar", Date.now());
   const user = db.prepare("SELECT id, username, locale, public_key, created_at, token_version FROM users WHERE id = ?").get(info.lastInsertRowid);
@@ -113,7 +117,7 @@ router.post("/login", async (req, res) => {
   const ok = await bcrypt.compare(password, row.password_hash);
   if (!ok) { recordLoginFail(username); return res.status(401).json({ error: "wrong credentials" }); }
   recordLoginSuccess(username);
-  const user = { id: row.id, username: row.username, locale: row.locale, public_key: row.public_key, created_at: row.created_at, token_version: row.token_version ?? 0 };
+  const user = { id: row.id, username: row.username, locale: row.locale, public_key: row.public_key, created_at: row.created_at, token_version: row.token_version ?? 0, is_demo: !!row.is_demo };
   res.json({ token: signToken(user), user });
 });
 
@@ -141,6 +145,9 @@ router.post("/update-public-key", authRequired, (req, res) => {
 });
 
 router.post("/change-password", authRequired, async (req, res) => {
+  // حسابات الزوار التجريبية (P7) بلا كلمات مرور يملكها أحد — كلمتها العشوائية
+  // خادمية فقط، وتغييرها يكسر تجديد المسبح — فالحرس قبل أي تحقق آخر.
+  if (req.user.is_demo) return res.status(403).json({ error: "demo account" });
   const { oldPassword, newPassword } = req.body || {};
   if (typeof oldPassword !== "string" || typeof newPassword !== "string") return res.status(400).json({ error: "invalid payload" });
   if (newPassword.length < 6 || newPassword.length > 72) return res.status(400).json({ error: "password must be 6-72 chars" });
@@ -178,4 +185,4 @@ router.delete("/key-backup", authRequired, (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, verifyToken, JWT_SECRET, authRequired, loginLocked, recordLoginFail, recordLoginSuccess, LOGIN_LOCKOUT_MS, LOGIN_MAX_FAILS };
+module.exports = { router, verifyToken, JWT_SECRET, authRequired, loginLocked, recordLoginFail, recordLoginSuccess, LOGIN_LOCKOUT_MS, LOGIN_MAX_FAILS, signToken, RESERVED_USERNAMES };

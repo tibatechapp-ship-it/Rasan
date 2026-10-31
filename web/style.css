@@ -67,7 +67,10 @@ header h2{font-size:1.0625rem;color:var(--text);font-weight:600}
 .msg .edited{font-size:0.625rem;color:var(--text-soft);font-style:italic;margin-inline-start:4px}
 .typing{height:20px;padding:0 16px 6px;color:var(--muted);font-size:0.75rem;font-style:italic}
 .composer{display:flex;gap:8px;padding:10px 12px;background:var(--surface-2);border-top:1px solid var(--surface-3);flex-shrink:0}
-.composer input{flex:1;border:0;border-radius:24px;padding:12px 18px;background:var(--surface-3);color:var(--text);font-size:0.9375rem}
+/* min-width:0 — الحقل يتقلص تحت عرضه الداخلي (~170px) وإلا تجاوز الشريط
+   أفقياً على الشاشات الضيقة (360–480px) ويخرج زر الإرسال من الشاشة
+   (خلل حقيقي اكتشفه E2E الأسبوع 2 — رحلة الزائر فشلت عند النقر عليه) */
+.composer input{flex:1;min-width:0;border:0;border-radius:24px;padding:12px 18px;background:var(--surface-3);color:var(--text);font-size:0.9375rem}
 .composer input:focus{background:var(--surface-4)}
 .send{border:0;border-radius:50%;width:46px;height:46px;background:var(--accent);color:var(--accent-ink);font-size:1.125rem;cursor:pointer;font-weight:700;transition:.2s;flex-shrink:0}
 .send:hover{background:var(--accent-strong);transform:scale(1.05)}
@@ -335,3 +338,6 @@ header h2{font-size:1.0625rem;color:var(--text);font-weight:600}
 .load-older{margin:8px auto;padding:8px 18px;border-radius:999px;border:1px solid var(--surface-3);background:var(--surface-2);color:var(--accent);cursor:pointer;font-family:inherit;font-size:0.8125rem;font-weight:600;display:block}
 .load-older:hover{border-color:var(--accent)}
 .load-older:disabled{opacity:.5;cursor:wait}
+
+/* ===== شارة الزائر التجريبي (P7 — صفحة /demo) ===== */
+.demo-banner{background:var(--surface-2);border-bottom:1px solid var(--surface-3);color:var(--text-soft);font-size:0.8125rem;padding:8px 16px;text-align:center;flex-shrink:0}
