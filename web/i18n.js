@@ -20,6 +20,12 @@ window.I18N = {
     ttlMenu:"⏲ مؤقت المتلاشية", ttlOff:"إيقاف", ttl1h:"ساعة", ttl1d:"يوم واحد", ttl1w:"أسبوع", ttl30d:"30 يوماً", ttlToast:"⏲ مؤقت المتلاشية للرسائل الجديدة", ttlClearedToast:"⏲ أُلغي مؤقت المتلاشية", convPending:"طلب معلّق", requestsTitle:"طلبات المراسلة", reqAccept:"قبول", reqDecline:"رفض", reqAcceptedToast:"✅ تم قبول الطلب — المحادثة نشطة الآن", reqDeclinedToast:"تم رفض الطلب وحُذفت المحادثة", loadOlder:"⬆ تحميل الرسائل الأقدم", ttlBadge:"⏲",
     // P7 — شارة الزائر التجريبي (صفحة /demo)
     demoBanner:"حساب زائر تجريبي — بياناته تُمسح تلقائياً كل بضع ساعات، لا تستخدمه لحسابك الدائم",
+    // أسبوع 3 — بنية MLS (روح RFC 9420): إبوكات + أغلفة إفيمرالية + commitment
+    mlsEnableConfirm:"تفعيل تشفير MLS لهذه المحادثة؟ تبدأ سلسلة إبوكات جديدة (سرقة مفتاح اليوم لا تفسد مفاتيح الغد)",
+    mlsRotateConfirm:"توليد إبوك مفاتيح جديد (MLS)؟ كل الأعضاء الحاليون سيكملون تلقائياً والمغادرون يتوقفون عن فك الجديد",
+    mlsEnabledToast:"🔐 تفعّل تشفير MLS — سلسلة إبوكات جديدة",
+    mlsDisabledToast:"أُوقف تشفير MLS — عاد توزيع المفاتيح السابق",
+    mlsRotatedToast:"🔐 مفاتيح جديدة (MLS) — الإبوك",
     errors:{ "bad username":"اسم المستخدم غير صالح (3–24 محرفًا: حروف إنجليزية/أرقام/_)", "bad password":"كلمة المرور قصيرة (6 محارف فأكثر)", "username taken":"الاسم محجوز مسبقًا — جرّب اسمًا آخر", "wrong credentials":"اسم المستخدم أو كلمة المرور غير صحيحة", "too many attempts":"محاولات كثيرة — انتظر قليلًا ثم أعد المحاولة", "account locked":"الحساب مقفول مؤقتاً بسبب محاولات فاشلة كثيرة — انتظر ثم أعد المحاولة", "invalid payload":"البيانات غير مكتملة", "public key required":"تعذر توليد المفاتيح — أعد المحاولة", "unauthorized":"الجلسة منتهية — أعد تسجيل الدخول", "Failed to fetch":"تعذر الاتصال بالخادم — تحقق من الشبكة" } },
   en: { tagline:"A thread that binds, not breaks", login:"Login", register:"Sign up", stories:"Stories (24h)", post:"Post", close:"Close", send:"Send", newChat:"New chat", newGroup:"New group", create:"Create", noMessages:"No messages yet. Say hi!", typing:"typing...", joined:"joined", left:"left", attach:"Attach", logout:"Logout",
     usernamePh:"Username", passwordPh:"Password", messagePh:"Type a message...", storyPh:"Story text...", groupNamePh:"Group name", groupDescPh:"Description (optional)", groupTypeLabel:"Type", groupMembersPh:"Usernames (comma-separated)",
@@ -42,6 +48,12 @@ window.I18N = {
     ttlMenu:"⏲ Disappearing timer", ttlOff:"Off", ttl1h:"1 hour", ttl1d:"1 day", ttl1w:"1 week", ttl30d:"30 days", ttlToast:"⏲ Disappearing timer for new messages", ttlClearedToast:"⏲ Disappearing timer cleared", convPending:"Pending request", requestsTitle:"Message requests", reqAccept:"Accept", reqDecline:"Decline", reqAcceptedToast:"✅ Request accepted — chat is now active", reqDeclinedToast:"Request declined and conversation deleted", loadOlder:"⬆ Load older messages", ttlBadge:"⏲",
     // P7 — visitor badge (/demo landing)
     demoBanner:"Visitor demo account — its data is wiped automatically every few hours; don't use it for your permanent account",
+    // Week 3 — MLS architecture (RFC 9420 spirit): epochs + ephemeral wraps + commitment
+    mlsEnableConfirm:"Enable MLS encryption for this chat? A new epoch chain starts (stealing today's key won't compromise tomorrow's)",
+    mlsRotateConfirm:"Generate a new MLS key epoch? All current members continue seamlessly; removed ones stop decrypting new traffic",
+    mlsEnabledToast:"🔐 MLS encryption enabled — new epoch chain",
+    mlsDisabledToast:"MLS encryption disabled — legacy key distribution restored",
+    mlsRotatedToast:"🔐 New keys (MLS) — epoch",
     errors:{ "bad username":"Invalid username (3–24 chars: a-z/0-9/_)", "bad password":"Password too short (min 6 chars)", "username taken":"Username already taken", "wrong credentials":"Wrong username or password", "too many attempts":"Too many attempts — wait a moment and retry", "account locked":"Account temporarily locked after too many failed attempts — wait and retry", "invalid payload":"Incomplete data", "public key required":"Key generation failed — try again", "unauthorized":"Session expired — sign in again", "Failed to fetch":"Cannot reach the server — check your connection" } },
   fr: { tagline:"Un fil qui lie, pas qui rompt", login:"Connexion", register:"S'inscrire", stories:"Stories (24h)", post:"Publier", close:"Fermer", send:"Envoyer", newChat:"Nouveau chat", newGroup:"Nouveau groupe", create:"Créer", noMessages:"Pas encore de messages.", typing:"écrit...", joined:"a rejoint", left:"a quitté", attach:"Joindre", logout:"Déconnexion" },
   es: { tagline:"Un hilo que une, no rompe", login:"Entrar", register:"Registrarse", stories:"Stories (24h)", post:"Publicar", close:"Cerrar", send:"Enviar", newChat:"Nuevo chat", newGroup:"Nuevo grupo", create:"Crear", noMessages:"Sin mensajes aún.", typing:"escribiendo...", joined:"se unió", left:"salió", attach:"Adjuntar", logout:"Salir" },

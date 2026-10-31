@@ -27,10 +27,15 @@ const privacy = require("./privacy");
 const ephemeral = require("./ephemeral");
 // صفحة التجربة العامة (P7 — أسبوع 2 من خارطة المنتَجة): حسابات زوار + مسح دوري
 const demo = require("./demo");
+// بنية MLS (أسبوع 3 من خارطة المنتَجة — روح RFC 9420): إبوكات + أغلفة إفيمرالية
+const mls = require("./mls");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" }, maxHttpBufferSize: 1e6, pingTimeout: 30000 });
+// ORIGIN (مراجعة المنافسين §6): تقييد مصدر مقابس Socket.IO عند الحاجة بدل "*" —
+// الخدمة المخدمة من نفس الأصل لا تحتاج شيئاً؛ القيمة الافتراضية كما كانت بلا كسر
+const IO_ORIGIN = process.env.ORIGIN || "*";
+const io = new Server(server, { cors: { origin: IO_ORIGIN }, maxHttpBufferSize: 1e6, pingTimeout: 30000 });
 
 app.set("trust proxy", 1);
 app.use(security.securityHeaders);
@@ -51,6 +56,7 @@ app.use("/api", moderation.createRouter({ authRequired, io }));
 app.use("/api", interactions.createRouter({ authRequired, io }));
 app.use("/api", privacy.createRouter({ authRequired, io })); // P6: ttl + accept/decline
 app.use("/api", demo.createRouter({ signToken, io })); // P7: جلسة الزائر + حالة الصفحة
+app.use("/api", mls.createRouter({ authRequired, io })); // أسبوع 3: إبوكات MLS + الأغلفة الإفيمرالية
 
 const upload = multer({ dest: UPLOAD_DIR, limits: { fileSize: 30 * 1024 * 1024 } });
 
@@ -365,7 +371,8 @@ app.get("/api/conversations", authRequired, (req, res) => {
   // pinned_message_id مرفق للأدوات الإشرافية — اللاصقة تعرضها فور فتح المحادثة
   // ttl_seconds وdm_accepted (P6): مؤقت المتلاشية + طلبات الرسائل — يعرف
   // العميل منهما ما يحتاج دون نداء إضافي.
-  const rows = db.prepare(`SELECT c.id, c.type, c.name, c.description, c.owner_id, c.created_at, c.current_key_version, c.pinned_message_id, c.ttl_seconds, c.dm_accepted,
+  // mls_enabled (أسبوع 3): يعرف العميل من القائمة نفسها هل المحادثة على سلسلة MLS
+  const rows = db.prepare(`SELECT c.id, c.type, c.name, c.description, c.owner_id, c.created_at, c.current_key_version, c.pinned_message_id, c.ttl_seconds, c.dm_accepted, c.mls_enabled,
     (SELECT COUNT(*) FROM conversation_members WHERE conversation_id = c.id) AS members
     FROM conversations c JOIN conversation_members m ON m.conversation_id = c.id
     WHERE m.user_id = ? ORDER BY c.created_at DESC`).all(req.user.id);

@@ -134,6 +134,24 @@ CREATE TABLE IF NOT EXISTS poll_votes (
   PRIMARY KEY (message_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_poll_votes_msg ON poll_votes(message_id);
+CREATE TABLE IF NOT EXISTS mls_epochs (
+  conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  epoch INTEGER NOT NULL,
+  commitment TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (conversation_id, epoch)
+);
+CREATE TABLE IF NOT EXISTS mls_wraps (
+  conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  epoch INTEGER NOT NULL,
+  for_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  eph_pub TEXT NOT NULL,
+  wrapped_key TEXT NOT NULL,
+  iv TEXT NOT NULL,
+  PRIMARY KEY (conversation_id, epoch, for_user)
+);
+CREATE INDEX IF NOT EXISTS idx_mls_wraps_user ON mls_wraps(for_user);
 `);
 
 // تنظيف تلقائي لتفاعلات الرسائل وأصوات الاستطلاعات عند حذفها — يعمل على كل
@@ -210,6 +228,14 @@ try {
 }
 try {
   db.exec("ALTER TABLE users ADD COLUMN demo_last_used INTEGER DEFAULT 0");
+} catch (e) {
+  if (!String(e.message).includes("duplicate column name")) throw e;
+}
+// mls_enabled (أسبوع 3 — بنية MLS روح RFC 9420): مبدّل اختياري لكل محادثة
+// مجموعة/قناة. 0 (الافتراضي) = توزيع المفاتيح القديم كما هو بلا أي تغيير سلوك —
+// التفعيل يبدأ سلسلة إبوكات (mls_epochs/mls_wraps) بأغلفة إفيمرالية لكل عضو.
+try {
+  db.exec("ALTER TABLE conversations ADD COLUMN mls_enabled INTEGER DEFAULT 0");
 } catch (e) {
   if (!String(e.message).includes("duplicate column name")) throw e;
 }

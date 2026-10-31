@@ -316,6 +316,8 @@ async function enterApp() {
   $("auth").classList.add("hidden");
   $("app").classList.remove("hidden");
   if (!state.myKeys) state.myKeys = await idbGet("myKeypair");
+  // حقن نداء api في وحدة MLS (التوكن يعيش هنا — أسبوع 3: بنية MLS للمجموعات)
+  if (typeof RasanMls !== "undefined") RasanMls.init({ api });
   // شارة الزائر التجريبي (P7): حسابات /demo فقط — تذكير دائم بأن البيانات مؤقتة
   if (state.user?.is_demo) $("demo-banner")?.classList.remove("hidden");
   connectSocket();
@@ -437,6 +439,9 @@ async function connectSocket() {
   });
   state.socket.on("member:added", async ({ userId, username }) => {
     if (!state.activeConv) return;
+    // MLS (أسبوع 3): العضو الجديد يعيد تهيئة السلسلة بنفسه عند أول فتح (شفاء ذاتي —
+    // لا غلاف له في الإبوك الحالي) — مسار التغليف القديم هنا لا يعنيه إطلاقاً
+    if (state.activeConv.mls_enabled) return;
     // If I'm owner, wrap key for new member
     if (state.activeConv.owner_id === state.user.id && state.activeKey) {
       try {
@@ -451,10 +456,32 @@ async function connectSocket() {
   });
   state.socket.on("member:removed", async ({ userId }) => {
     if (!state.activeConv) return;
+    // MLS (أسبوع 3): أي عضو يصدر إبوكاً جديداً يستثني المغادر (خاصية MLS — لا احتكار
+    // للمالك)؛ تضارب عضوين متزامنين يفصله الخادم (409) فيتبنّى الخاسر إبوك الفائز
+    if (state.activeConv.mls_enabled && typeof RasanMls !== "undefined" && state.activeKey) {
+      try { await RasanMls.commitNewEpoch(state.activeConv.id, state.myKeys); } catch (e) { console.error("MLS commit failed:", e); }
+      return;
+    }
     const { members } = await api(`/api/conversations/${state.activeConv.id}/members`).catch(() => ({ members: [] }));
     const me = members.find(m => m.id === state.user.id);
     if (!me || !["owner", "admin"].includes(me.role)) return;
     try { await rotateGroupKey(state.activeConv); } catch (e) { console.error("Key rotation failed:", e); }
+  });
+  // MLS (أسبوع 3): عضو آخر نشر إبوكاً جديداً — تبنّاه فوراً إن كنت في هذه المحادثة
+  state.socket.on("mls:commit", async ({ conversationId, epoch, by }) => {
+    if (!state.activeConv || state.activeConv.id !== conversationId || by === state.user.id) return;
+    if (!state.activeConv.mls_enabled || typeof RasanMls === "undefined") return;
+    try {
+      const mls = await RasanMls.adopt(state.activeConv.id, state.myKeys, epoch);
+      if (mls && mls.key) { state.activeKey = mls.key; state.activeKeyVersion = mls.epoch; showToast(`${t("mlsRotatedToast")} #${epoch}`, "info"); }
+    } catch (e) { console.error("MLS adopt failed:", e); }
+  });
+  // MLS: فُعّل/أُوقف على المحادثة — حدّث الحالة المحلية فوراً
+  state.socket.on("mls:enabled", ({ conversationId, enabled }) => {
+    const c = state.convs.find(x => x.id === conversationId);
+    if (c) c.mls_enabled = enabled ? 1 : 0;
+    if (state.activeConv?.id === conversationId) state.activeConv.mls_enabled = enabled ? 1 : 0;
+    showToast(enabled ? t("mlsEnabledToast") : t("mlsDisabledToast"), "info");
   });
   state.socket.on("message:rejected", async ({ reason, expected, got }) => {
     if (reason === "key_version_mismatch") {
@@ -736,6 +763,15 @@ async function openConversation(conv) {
       conv._members = members;
       conv._myRole = members.find((m) => m.id === state.user.id)?.role || "member";
     } catch { conv._myRole = "member"; }
+    // MLS (أسبوع 3): المحادثات المفعّل فيها MLS تأخذ مفتاحها من سلسلة الإبوكات
+    // (HKDF من سرّ الإبوك) — مسار التشفير نفسه كما هو: state.activeKey فقط
+    // تغيّر مصدره. فشل MLS لا يمنع فتح المحادثة: ensureGroupKey أعلاه يبقى احتياطاً.
+    if (conv.mls_enabled && typeof RasanMls !== "undefined") {
+      try {
+        const mls = await RasanMls.ensure(conv, state.myKeys);
+        if (mls && mls.key) { state.activeKey = mls.key; state.activeKeyVersion = mls.epoch; }
+      } catch (e) { console.error("MLS ensure failed:", e); }
+    }
   }
 
   // ترقيم صفحات التاريخ (P6): الخادم يعيد hasMore/oldestId — زر «الأقدم»
@@ -813,7 +849,15 @@ async function ensureGroupKey(conv) {
 }
 
 async function decryptMessage(m) {
-  try { if (state.activeKey) return await RasanCrypto.decrypt(state.activeKey, m.ciphertext, m.iv); return "🔒"; } catch { return "🔒"; }
+  try {
+    // MLS (أسبوع 3): رسائل تاريخية بإبوك أقدم — مفتاحها من الأرشيف المحلي المحدود
+    if (state.activeConv?.mls_enabled && typeof RasanMls !== "undefined" && m.key_version && state.activeKeyVersion && m.key_version !== state.activeKeyVersion) {
+      const k = await RasanMls.keyForEpoch(state.activeConv.id, m.key_version);
+      if (k) return await RasanCrypto.decrypt(k, m.ciphertext, m.iv);
+    }
+    if (state.activeKey) return await RasanCrypto.decrypt(state.activeKey, m.ciphertext, m.iv);
+    return "🔒";
+  } catch { return "🔒"; }
 }
 
 function appendMessage(m, opts) {
@@ -1645,8 +1689,23 @@ $("logout").addEventListener("click", () => { localStorage.removeItem("rasan_tok
 // ===== Rotate key button =====
 $("rotate-key").addEventListener("click", async () => {
   if (!state.activeConv || state.activeConv.type === "dm") return;
-  if (!confirm(t("rotateConfirm"))) return;
-  try { const v = await rotateGroupKey(state.activeConv); showToast(t("rotatedTo") + " " + v, "success"); } catch (e) { showToast(translateErr(e.message), "error"); }
+  // MLS (أسبوع 3): المحادثة على سلسلة الإبوكات → زر التدوير يصدر إبوكاً جديداً؛
+  // غير المفعّلة → العرض بتفعيل MLS أولاً (يبدأ الإبوك 1 فوراً بعد التأكيد)
+  if (state.activeConv.mls_enabled && typeof RasanMls !== "undefined") {
+    if (!confirm(t("mlsRotateConfirm"))) return;
+    try {
+      const r = await RasanMls.commitNewEpoch(state.activeConv.id, state.myKeys);
+      showToast(`${t("mlsRotatedToast")} #${r.epoch}`, "success");
+    } catch (e) { showToast(translateErr(e.message), "error"); }
+    return;
+  }
+  if (!confirm(t("mlsEnableConfirm"))) return;
+  try {
+    await api(`/api/conversations/${state.activeConv.id}/mls/enabled`, { method: "PUT", body: JSON.stringify({ enabled: true }) });
+    state.activeConv.mls_enabled = 1;
+    const r = await RasanMls.commitNewEpoch(state.activeConv.id, state.myKeys);
+    showToast(`${t("mlsEnabledToast")} (#${r.epoch})`, "success");
+  } catch (e) { showToast(translateErr(e.message), "error"); }
 });
 
 // ===== Stories =====
