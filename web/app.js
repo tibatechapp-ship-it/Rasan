@@ -735,6 +735,9 @@ async function openConversation(conv) {
   state.socket.emit("join", { conversationId: conv.id });
   $("rotate-key").classList.toggle("hidden", conv.type === "dm");
 
+  // التصدير المشفّر متاح لكل أنواع المحادثات (أسبوع 4)
+  $("export-btn").classList.remove("hidden");
+
   state.activeKey = null;
   if (conv.type === "dm") {
     const { members } = await api(`/api/conversations/${conv.id}/members`);
@@ -1685,6 +1688,122 @@ $("back").addEventListener("click", () => {
 });
 
 $("logout").addEventListener("click", () => { localStorage.removeItem("rasan_token"); location.reload(); });
+
+// ===== أسبوع 4 — السيادة على الجهاز: تصدير مشفّر ذاتياً + جلسات مرئية =====
+
+// كشف تاريخ المحادثة كاملاً عبر ترقيم P6 (?before=&limit=100) — فكّ محلي لكل
+// صفحة عبر decryptMessage نفسه (نفس مسار MLS/DM)، والخادم يعيد ciphertext
+// فقط كما في العرض العادي: لا مسار جديد للنصوص ولا نقطة نزيف.
+async function gatherHistory(conv, onProgress) {
+  const out = [];
+  let before = null;
+  for (;;) {
+    const q = before ? `?before=${before}&limit=100` : "?limit=100";
+    const resp = await api(`/api/conversations/${conv.id}/messages${q}`);
+    const batch = resp.messages || [];
+    for (const m of batch) {
+      let text;
+      if (m.type === "file") {
+        const raw = await decryptMessage(m);
+        try { text = "📎 " + (JSON.parse(raw)?.name || "ملف"); } catch { text = "📎 ملف"; }
+      } else {
+        text = await decryptMessage(m);
+      }
+      out.push({ ...m, text });
+    }
+    if (onProgress) onProgress(out.length);
+    if (!resp.hasMore || !batch.length) break;
+    before = resp.oldestId ?? batch[batch.length - 1]?.id;
+    if (!before) break; // حارس دوران — الخادم بلا oldestId يعني نهاية التاريخ
+  }
+  return out.reverse(); // الصفحات حديثة→قديمة؛ الرفع يجعلها زمنياً تصاعدياً
+}
+
+$("export-btn")?.addEventListener("click", () => {
+  if (!state.activeConv) return;
+  $("export-pass").value = ""; $("export-pass2").value = "";
+  $("export-status").textContent = "";
+  openModal("export-modal");
+  $("export-pass").focus();
+});
+$("export-close")?.addEventListener("click", () => closeModal("export-modal"));
+$("export-go")?.addEventListener("click", async () => {
+  const pass = $("export-pass").value, pass2 = $("export-pass2").value, status = $("export-status");
+  if (pass !== pass2) { status.textContent = t("exportPassMismatch"); return; }
+  if (pass.length < 8) { status.textContent = t("exportShortPass"); return; }
+  const conv = state.activeConv;
+  if (!conv || typeof RasanExport === "undefined") return;
+  $("export-go").disabled = true;
+  try {
+    status.textContent = t("exportCollecting");
+    const messages = await gatherHistory(conv, (n) => { status.textContent = `${t("exportCollecting")} ${n}`; });
+    const archive = RasanExport.buildArchive({
+      conversation: { id: conv.id, title: conv.name, type: conv.type },
+      me: state.user, messages,
+    });
+    const container = await RasanExport.encryptArchive(archive, pass);
+    RasanExport.downloadContainer(container, RasanExport.exportFileName(conv.id), conv.id);
+    status.textContent = t("exportDone");
+    showToast(t("exportDone"), "success");
+    setTimeout(() => closeModal("export-modal"), 1400);
+  } catch (e) {
+    status.textContent = t("exportFailed") + e.message;
+  } finally { $("export-go").disabled = false; }
+});
+
+// ---- الأجهزة والجلسات (نمط Signal «Linked devices»): قائمة حية + طرد فوري ----
+function deviceIcon(device) {
+  return { Android: "🤖", iOS: "📱", Windows: "🖥", macOS: "💻", Linux: "🐧" }[device] || "🌐";
+}
+
+async function openDevices() {
+  const list = $("devices-list");
+  list.innerHTML = "";
+  openModal("devices-modal");
+  try {
+    const { sessions } = await api("/api/auth/sessions");
+    list.innerHTML = "";
+    if (!sessions.length) { list.textContent = t("devicesEmpty"); return; }
+    for (const s of sessions) {
+      const row = document.createElement("div");
+      row.className = "device-row" + (s.current ? " current" : "");
+      row.setAttribute("role", "listitem");
+      const icon = document.createElement("span");
+      icon.className = "device-icon"; icon.textContent = deviceIcon(s.device);
+      icon.setAttribute("aria-hidden", "true");
+      const info = document.createElement("div"); info.className = "device-info";
+      const name = document.createElement("b");
+      name.textContent = (s.device || "Web") + (s.current ? " — " + t("deviceCurrent") : "");
+      const meta = document.createElement("small");
+      meta.textContent = `${t("deviceLastSeen")} ${new Date(s.last_seen).toLocaleString(state.locale)}`;
+      info.append(name, meta);
+      const kick = document.createElement("button");
+      kick.className = "icon device-kick"; kick.textContent = "✕"; kick.title = t("deviceKick");
+      kick.setAttribute("aria-label", t("deviceKick"));
+      kick.addEventListener("click", async () => {
+        try {
+          await api(`/api/auth/sessions/${s.id}`, { method: "DELETE" });
+          if (s.current) { localStorage.removeItem("rasan_token"); location.reload(); return; }
+          showToast("✓", "success");
+          openDevices(); // تحديث القائمة بعد الطرد
+        } catch (e) { showToast(translateErr(e.message), "error"); }
+      });
+      row.append(icon, info, kick);
+      list.append(row);
+    }
+  } catch (e) {
+    list.textContent = t("devicesFailed");
+  }
+}
+$("devices-btn")?.addEventListener("click", openDevices);
+$("devices-close")?.addEventListener("click", () => closeModal("devices-modal"));
+// خروج من كل الأجهزة (P6 logout-all أصبح مرئياً أخيراً): قتل كل التوكنات
+// والجلسات دفعة واحدة ثم العودة لشاشة الدخول
+$("logout-all-btn")?.addEventListener("click", async () => {
+  try { await api("/api/auth/logout-all", { method: "POST" }); } catch { /* مات التوكن أصلاً — اخرج */ }
+  localStorage.removeItem("rasan_token");
+  location.reload();
+});
 
 // ===== Rotate key button =====
 $("rotate-key").addEventListener("click", async () => {

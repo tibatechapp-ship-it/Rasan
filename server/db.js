@@ -104,6 +104,19 @@ CREATE TABLE IF NOT EXISTS device_tokens (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_token_user ON device_tokens(user_id);
+-- الجلسات المرئية (أسبوع 4 — نمط Signal/WhatsApp «الأجهزة»): صف لكل دخول،
+-- الـ JWT يحمل sid يطابق الصف — authRequired يرفض أي جلسة سحبت (revoked_at>0)
+-- حتى لو توقيعها سليم، وآخر ظهور يُحدَّث بقناع 60 ثانية (كتابة واحدة/دقيقة/جلسة
+-- لا كتابة في كل طلب). التوكنات القديمة بلا sid تكمل عاملًا (توافق رجعي).
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL,
+  revoked_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, revoked_at);
 CREATE TABLE IF NOT EXISTS conversation_bans (
   conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

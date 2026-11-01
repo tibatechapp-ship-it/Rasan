@@ -1,20 +1,63 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { randomBytes } = require("node:crypto");
 const { db } = require("./db");
 
 const router = express.Router();
+
+// ===== الجلسات المرئية (أسبوع 4 — نمط Signal/WhatsApp «الأجهزة المرتبطة»)
+// كل دخول ينشئ صفاً في sessions، والتوكن يحمل sid يطابقه. authRequired يرفض
+// جلسة سُحبت حتى لو توقيعها سليم، وقائمة الأجهزة تُدار من العميل (طرد جهاز
+// واحد بدل خروج شامل). التوكنات القديمة بلا sid تكمل عاملًا (توافق رجعي:
+// لا إجبار مستخدم قديم على إعادة الدخول عند الترقية).
+const SESSIONS_CAP = 30; // سقف الجلسات لكل مستخدم — الأقدم يُمسح عند الدخول
+const LAST_SEEN_MASK_MS = 60 * 1000; // قناع تحديث آخر ظهور — كتابة/دقيقة كحد أقصى
+
+function generateSid() { return randomBytes(24).toString("hex"); }
+
+// تصنيف خشن لا يحفظ بصمة UA كاملة (الخصوصية: صنف الجهاز لا سلسلته)
+function coarseDevice(ua) {
+  const s = String(ua || "");
+  if (/Android/i.test(s)) return "Android";
+  if (/iPhone|iPad|iPod/i.test(s)) return "iOS";
+  if (/Windows/i.test(s)) return "Windows";
+  if (/Mac OS X|Macintosh/i.test(s)) return "macOS";
+  if (/Linux/i.test(s)) return "Linux";
+  return "Web";
+}
+
+function validateDevice(d) {
+  return typeof d === "string" && (d = d.trim()).length >= 1 && d.length <= 64 ? d : null;
+}
+
+function createSession(userId, device) {
+  const sid = generateSid();
+  const now = Date.now();
+  db.prepare("INSERT INTO sessions (id, user_id, device, created_at, last_seen) VALUES (?, ?, ?, ?, ?)").run(sid, userId, device, now, now);
+  // سقف الجلسات: أبقِ الأحدث 30 فقط (ترتيب بآخر ظهور) — بلا نمو غير محدود
+  db.prepare(`DELETE FROM sessions WHERE user_id = ? AND id NOT IN
+    (SELECT id FROM sessions WHERE user_id = ? ORDER BY last_seen DESC, created_at DESC LIMIT ${SESSIONS_CAP})`).run(userId, userId);
+  return sid;
+}
+
+function revokeAllSessions(userId) {
+  db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at = 0").run(Date.now(), userId);
+}
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is required in production');
 const JWT_SECRET = process.env.JWT_SECRET || "dev-only-change-me";
 const JWT_EXPIRES = "30d";
 
 const RATE = new Map();
+// السقف قابل للضبط بيئياً (نفس عقد LOGIN_LOCKOUT_MS): الشبكات المشتركة خلف
+// NAT (مكتب/مخيم) تصطدم بسقف IP واحد صارم — المشغّل يرفعه دون تعديل كود
+const RATE_MAX = Number(process.env.RATE_MAX) > 0 ? Number(process.env.RATE_MAX) : 20;
 function rateLimit(ip) {
   const now = Date.now();
   const r = RATE.get(ip) || { c: 0, reset: now + 15 * 60 * 1000 };
   if (now > r.reset) { r.c = 0; r.reset = now + 15 * 60 * 1000; }
   r.c++; RATE.set(ip, r);
-  return r.c <= 20;
+  return r.c <= RATE_MAX;
 }
 
 // قفل الحساب ضد التخمين (P6 — صلب أمان إضافي فوق حدّ الـ IP):
@@ -64,12 +107,15 @@ function validatePublicKey(k) {
   try { return atob(k).length === 65; } catch { return false; }
 }
 
-function signToken(user) {
+function signToken(user, sid) {
   // ver = token_version: يُرفع عند تغيير كلمة المرور أو «خروج من كل الأجهزة»
   // فيموت كل توكن صدر قبل ذلك (authRequired يرفض أي ver قديم) — إبطال جلسات
   // فوري بلا قائمة revocation (نمط إدارة الجلسات في Signal/WhatsApp، P6).
+  // sid (أسبوع 4): معرّف الجلسة — طرد جهاز واحد دون قتل البقية.
   const ver = user.token_version ?? 0;
-  return jwt.sign({ sub: user.id, username: user.username, ver }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+  const claims = { sub: user.id, username: user.username, ver };
+  if (sid) claims.sid = sid;
+  return jwt.sign(claims, JWT_SECRET, { expiresIn: JWT_EXPIRES });
 }
 function verifyToken(token) {
   try { return jwt.verify(token, JWT_SECRET); } catch { return null; }
@@ -85,6 +131,16 @@ function authRequired(req, res, next) {
   // توكن صادر قبل رفع token_version (تغيير مرور/خروج شامل) = ميت — حتى لو
   // توقيعه صحيح، ليعمل تغيير كلمة المرور كإبطال فوري لكل الجلسات الأخرى.
   if ((p.ver ?? 0) !== (user.token_version ?? 0)) return res.status(401).json({ error: "unauthorized" });
+  // الجلسات المرئية (أسبوع 4): توكن بـ sid يُرفض إذا سُحبت جلسته — طرد جهاز
+  // يعمل فوراً بلا انتظار انتهاء صلاحية التوكن. بلا sid (توكنات ما قبل
+  // الأسبوع 4) لا فحص جلسة — توافق رجعي بلا إجبار إعادة دخول.
+  if (p.sid) {
+    const s = db.prepare("SELECT user_id, revoked_at, last_seen FROM sessions WHERE id = ?").get(String(p.sid));
+    if (!s || s.user_id !== user.id || s.revoked_at > 0) return res.status(401).json({ error: "unauthorized" });
+    if (s.last_seen < Date.now() - LAST_SEEN_MASK_MS) {
+      db.prepare("UPDATE sessions SET last_seen = ? WHERE id = ?").run(Date.now(), String(p.sid));
+    }
+  }
   req.user = user;
   next();
 }
@@ -101,7 +157,8 @@ router.post("/register", async (req, res) => {
   const hash = await bcrypt.hash(password, 10);
   const info = db.prepare("INSERT INTO users (username, password_hash, public_key, locale, created_at) VALUES (?, ?, ?, ?, ?)").run(u, hash, publicKey, locale || "ar", Date.now());
   const user = db.prepare("SELECT id, username, locale, public_key, created_at, token_version FROM users WHERE id = ?").get(info.lastInsertRowid);
-  res.json({ token: signToken(user), user });
+  const device = validateDevice(req.body?.device) || coarseDevice(req.headers["user-agent"]);
+  res.json({ token: signToken(user, createSession(user.id, device)), user });
 });
 
 router.post("/login", async (req, res) => {
@@ -118,7 +175,28 @@ router.post("/login", async (req, res) => {
   if (!ok) { recordLoginFail(username); return res.status(401).json({ error: "wrong credentials" }); }
   recordLoginSuccess(username);
   const user = { id: row.id, username: row.username, locale: row.locale, public_key: row.public_key, created_at: row.created_at, token_version: row.token_version ?? 0, is_demo: !!row.is_demo };
-  res.json({ token: signToken(user), user });
+  const device = validateDevice(req.body?.device) || coarseDevice(req.headers["user-agent"]);
+  res.json({ token: signToken(user, createSession(user.id, device)), user });
+});
+
+// قائمة الأجهزة/الجلسات الحية (أسبوع 4 — نمط Signal «Linked devices»):
+// الجلسة الحالية بعلامة current (مقارنة sid التوكن بعد التحقق في authRequired)
+router.get("/sessions", authRequired, (req, res) => {
+  const claims = jwt.decode(req.headers.authorization?.slice(7) || "") || {};
+  const rows = db.prepare("SELECT id, device, created_at, last_seen FROM sessions WHERE user_id = ? AND revoked_at = 0 ORDER BY last_seen DESC").all(req.user.id);
+  res.json({ sessions: rows.map(s => ({ id: s.id, device: s.device, created_at: s.created_at, last_seen: s.last_seen, current: s.id === claims.sid })) });
+});
+
+// طرد جهاز واحد (نمط Signal «Sign out from this device»): سحب sid واحد —
+// توكنه يموت فوراً في authRequired والبقية تكمل. طرد الجلسة الحالية = خروج.
+router.delete("/sessions/:sid", authRequired, (req, res) => {
+  const sid = String(req.params.sid || "");
+  if (!/^[a-f0-9]{48}$/.test(sid)) return res.status(400).json({ error: "bad session id" });
+  const row = db.prepare("SELECT id, user_id, revoked_at FROM sessions WHERE id = ?").get(sid);
+  if (!row || row.user_id !== req.user.id) return res.status(404).json({ error: "not found" });
+  if (row.revoked_at > 0) return res.status(404).json({ error: "not found" });
+  db.prepare("UPDATE sessions SET revoked_at = ? WHERE id = ?").run(Date.now(), sid);
+  res.json({ ok: true, revoked: sid, current: sid === (jwt.decode(req.headers.authorization?.slice(7) || "") || {}).sid });
 });
 
 // خروج من كل الأجهزة (P6 — نمط Signal/WhatsApp): رفع token_version يموت به
@@ -126,6 +204,7 @@ router.post("/login", async (req, res) => {
 // الدخول. عمداً بلا حذف أجهزة/بيانات — إبطال توكنات فقط.
 router.post("/logout-all", authRequired, (req, res) => {
   db.prepare("UPDATE users SET token_version = token_version + 1 WHERE id = ?").run(req.user.id);
+  revokeAllSessions(req.user.id); // القائمة المرئية تُفرغ أيضاً (أسبوع 4)
   res.json({ ok: true });
 });
 
@@ -160,6 +239,7 @@ router.post("/change-password", authRequired, async (req, res) => {
   // تبقى جلسة المهاجم حية. الجلسة الحالية تعمل حتى نهاية هذا الطلب فقط؛
   // العميل يعيد الدخول بالكلمة الجديدة.
   db.prepare("UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?").run(hash, req.user.id);
+  revokeAllSessions(req.user.id); // القائمة المرئية تُفرغ أيضاً (أسبوع 4)
   res.json({ ok: true });
 });
 
@@ -185,4 +265,4 @@ router.delete("/key-backup", authRequired, (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, verifyToken, JWT_SECRET, authRequired, loginLocked, recordLoginFail, recordLoginSuccess, LOGIN_LOCKOUT_MS, LOGIN_MAX_FAILS, signToken, RESERVED_USERNAMES };
+module.exports = { router, verifyToken, JWT_SECRET, authRequired, loginLocked, recordLoginFail, recordLoginSuccess, LOGIN_LOCKOUT_MS, LOGIN_MAX_FAILS, signToken, RESERVED_USERNAMES, createSession, revokeAllSessions, generateSid, coarseDevice, validateDevice, SESSIONS_CAP, LAST_SEEN_MASK_MS, RATE_MAX };

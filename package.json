@@ -1,6 +1,6 @@
 {
   "name": "rasan",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "رسن — تطبيق دردشة مشفّر نهاية-ل-نهاية (client + web + tests)",
@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "for f in web/*.js tests/*.js vitest.config.js; do node --check \"$f\" || exit 1; done && echo 'lint: ok'",
-    "verify": "npm run lint && npm test"
+    "verify": "npm run lint && npm test && npm run test:web",
+    "test:web": "node --test \"web/*.test.mjs\""
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^5.0.5",

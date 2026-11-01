@@ -60,6 +60,9 @@
       <button id="members-btn" class="icon hidden" aria-label="إدارة الأعضاء" title="الأعضاء والإشراف">🛡</button>
       <button id="emergency-btn" class="icon emergency hidden" aria-label="إنذار طوارئ" title="إنذار طوارئ">🚨</button>
       <button id="rotate-key" class="icon hidden" aria-label="تدوير مفتاح المجموعة" title="تدوير مفتاح المجموعة">🔄</button>
+      <!-- تصدير محادثة مشفّر ذاتياً (أسبوع 4): الأرشيف يُبنى ويُشفّر على الجهاز
+           كاملاً — عبارة المرور لا تغادر ولا الخادم يرى شيئاً -->
+      <button id="export-btn" class="icon hidden" aria-label="تصدير المحادثة مشفّراً" title="تصدير مشفّر">📦</button>
       <button id="new-chat" class="icon" aria-label="محادثة جديدة" title="محادثة جديدة">+</button>
       <button id="new-group" class="icon" aria-label="مجموعة جديدة" title="مجموعة">👥</button>
       <button id="stories-btn" class="icon" aria-label="ستوري" title="ستوري">◉</button>
@@ -68,6 +71,9 @@
       <!-- رسائل محفوظة لنفسي (P5 — نمط Telegram Saved Messages): مساحة شخصية مشفرة -->
       <button id="saved-btn" class="icon" aria-label="رسائل محفوظة" title="رسائل محفوظة (لنفسي)">🔖</button>
       <button id="lock-btn" class="icon" aria-label="القفل والمسح" title="القفل والمسح">🔒</button>
+      <!-- الأجهزة والجلسات النشطة (أسبوع 4 — نمط Signal Linked devices):
+           قائمة حية + طرد جهاز واحد + خروج شامل (P6 logout-all أصبح مرئياً) -->
+      <button id="devices-btn" class="icon" aria-label="الأجهزة والجلسات" title="الأجهزة والجلسات">🖥</button>
       <button id="logout" class="icon" aria-label="تسجيل الخروج" title="خروج">⎋</button>
     </div>
   </header>
@@ -334,6 +340,38 @@
   </div>
 </section>
 
+<!-- الأجهزة والجلسات النشطة (أسبوع 4 — نمط Signal «Linked devices»):
+     قائمة حية من الخادم + طرد جهاز واحد فوري + خروج شامل. التصنيف خشن
+     (نظام التشغيل فقط) — لا بصمة UA كاملة تُخزَّن. -->
+<section id="devices-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="devices-title">
+  <div class="modal-card">
+    <h3 id="devices-title" data-i18n="devicesTitle">الأجهزة والجلسات</h3>
+    <p class="devices-hint" data-i18n="devicesHint">كل دخول جلسة — اسحب أي جهاز لا تعرفه فوراً فلا يعود بعد ذلك</p>
+    <div id="devices-list" class="devices-list" role="list"></div>
+    <div class="modal-actions">
+      <button id="logout-all-btn" class="btn-danger" data-i18n="logoutAllBtn">خروج من كل الأجهزة</button>
+      <button id="devices-close" class="btn-secondary" data-i18n="devicesClose">إغلاق</button>
+    </div>
+  </div>
+</section>
+
+<!-- تصدير مشفّر ذاتياً (أسبوع 4): عبارة المرور + تأكيدها — الأرشيف يُبنى
+     ويُشفّر محلياً بالكامل (PBKDF2-SHA256 200k + AES-256-GCM)، عبارة المرور
+     لا تُرسل لأي مكان والخادم لا يرى شيئاً -->
+<section id="export-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="export-title">
+  <div class="modal-card">
+    <h3 id="export-title" data-i18n="exportTitle">تصدير المحادثة مشفّراً</h3>
+    <p class="export-hint" data-i18n="exportHint">أرشيف كامل للرسائل يُبنى على جهازك ويُشفّر بعبارة مرور لا تُرسل لأي مكان — احفظها جيداً: بلاها لا يُفتح الملف أبداً</p>
+    <input id="export-pass" type="password" autocomplete="new-password" data-i18n-placeholder="exportPassPh" placeholder="عبارة المرور (8 محارف فأكثر)" />
+    <input id="export-pass2" type="password" autocomplete="new-password" data-i18n-placeholder="exportPass2Ph" placeholder="تأكيد عبارة المرور" />
+    <p id="export-status" class="export-status" role="status"></p>
+    <div class="modal-actions">
+      <button id="export-go" class="btn-primary" data-i18n="exportGo">تصدير</button>
+      <button id="export-close" class="btn-secondary" data-i18n="exportCancel">إلغاء</button>
+    </div>
+  </div>
+</section>
+
 <div id="upload-status" class="upload-status hidden">
   <div class="upload-bar"><div id="upload-progress"></div></div>
   <span id="upload-label">جاري الرفع...</span>
@@ -346,6 +384,8 @@
 <script type="module" src="/identity.js"></script>
 <script src="/session.js"></script>
 <script src="/mls.js"></script>
+<!-- تصدير مشفّر ذاتياً (أسبوع 4): Web Crypto فقط — بلا أي اعتماديات -->
+<script src="/export.js"></script>
 <script type="module" src="/ui-identity.js"></script>
 <script type="module" src="/panic.js"></script>
 <script src="/app.js"></script>

@@ -36,7 +36,9 @@ describe('تركيب الخادم (server.js)', () => {
     expect(serverSrc).toContain('demo.sweepDemo({ io });');
   });
   it('signToken مصدَّر من auth.js — توقيع الجلسة بآلية المصادقة نفسها', () => {
-    expect(authSrc).toContain('module.exports = { router, verifyToken, JWT_SECRET, authRequired, loginLocked, recordLoginFail, recordLoginSuccess, LOGIN_LOCKOUT_MS, LOGIN_MAX_FAILS, signToken, RESERVED_USERNAMES }');
+    // أسبوع 4 وسّع الصادرات (createSession/revokeAllSessions/...) — العقد على
+    // المصدّرات الأصلية الثابتة لا النص الحرفي الكامل
+    expect(authSrc).toContain('module.exports = { router, verifyToken, JWT_SECRET, authRequired, loginLocked, recordLoginFail, recordLoginSuccess, LOGIN_LOCKOUT_MS, LOGIN_MAX_FAILS, signToken, RESERVED_USERNAMES,');
   });
 });
 
