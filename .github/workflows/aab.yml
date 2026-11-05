@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # Gradle/Kotlin في المشروع موجه على JVM 17 صراحة (build.gradle.kts)
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
