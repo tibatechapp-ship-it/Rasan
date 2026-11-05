@@ -19,7 +19,7 @@ dependencies:
   # Push notifications (FCM) — إشعارات آمنة بلا محتوى الرسائل (E2EE)
   firebase_core: ^3.6.0
   firebase_messaging: ^15.1.5
-  flutter_local_notifications: ^19.2.1
+  flutter_local_notifications: ^22.3.3
 
 dev_dependencies:
   flutter_test:
